@@ -852,41 +852,35 @@ ${processedText}`;
       const composePrompt = `${typeLabels[composeType] || "Draft an email"}.
 ${composeTo ? `To: ${composeTo}` : ""}
 From: ${userName || "me"}
-ONLY valid JSON: {"subject":"clear specific subject line","body":"email body"}
+Tone: ${toneConfig[tone] || toneConfig.friendly}
+Return ONLY valid JSON: {"subject":"subject line","body":"email body"}
+
+YOUR JOB:
+Read the user's notes below. Understand what they're trying to say — the intent, the ask, the context. Then write a clean, polished email from scratch that conveys the SAME message but better. This is a full redraft, not a spell-check.
+
+EXAMPLE OF WHAT TO DO:
+User notes: "tell holly and kyle, can we add the email part of the money losing asins in AIMS? i will still vet/analyze them manually but appscript is flagging me as spammer. the appscript was filtering yesterdays data by asin manager and sending each manager their list of asins to that manager. should i create a separate email dashboard or could AIMS do it"
+BAD draft: "I was wondering if we can add the email functionality for Money Losing ASINs in AIMS? I'll still vet them manually but AppScript is flagging me... Filter all of yesterday's data by ASIN Manager, Send the list of ASINs per Manager to that Manager"
+Problems: "email functionality" not "email sending", "vet" still there (should be "review"), "ASIN Manager" and "Manager" repeated 3 times, added bullet points unnecessarily, AppScript isn't doing the flagging — Gmail is
+GOOD draft: "I was wondering if we could add the email sending part of the Money Losing ASINs process into AIMS? I'll still review them manually, but I've been running into issues with Gmail flagging me as a spammer when sending through AppScript. Here's what it was doing before: [bullets] Filter all of yesterday's data by ASIN Manager [bullet] Send each one their respective list of ASINs. Would AIMS be able to replicate that, or should I create a separate email dashboard instead? Let me know which approach would be easier on your end."
+Why it's good: "email sending" preserved, "vet/analyze" consolidated to "review", Gmail identified as the flagger not AppScript, ASIN Manager said once then "each one" as pronoun, bullets only for the 2-step process list, natural flow
+
 RULES:
-- Language: Default to English. Only use another language if the user's notes are ENTIRELY in that language. When in doubt, English
-- Greeting: "Hi [name]," or "Hey [name]," — "Hey" for casual/friendly, "Hi" for formal. If no recipient name, start with "Hi," or "Hey,"
+1. UNDERSTAND FIRST: Read the notes carefully. Identify: who is this to, what are they asking/saying, what context did they provide, what response do they want
+2. PRESERVE MEANING: Never change WHO the user is referring to (if they say "team leads" don't change it to "managers"). Never change WHAT they're asking for (if they say "email sending" don't change it to "email functionality"). The specific words they use for roles, tools, and actions are intentional. Read carefully — if the user says "X is causing Y", make sure your draft says the same thing, not "Y is caused by Z"
+3. KEEP ALL KEY DETAILS: Every fact, name, process description, and question the user included must appear in the draft. Do not drop details
+4. DO NOT ADD: Never add information, questions, or context the user didn't mention
+5. NO REDUNDANCY: Each noun, name, tool, or concept should appear ONCE. Use pronouns (it, this, them, they, each one) for subsequent references. If two words mean the same thing (vet/analyze, check/review), pick ONE. After drafting, count every noun — if any appears more than once, replace the repeat with a pronoun
+6. SMART BULLET POINTS: Only use bullets when the user is describing a multi-step process or listing 2+ distinct items. Never convert a natural explanation into bullets
+7. NATURAL FLOW: Write like a human, not a template. The email should read as a natural conversation
+8. SENSE CHECK: Before outputting, re-read as the recipient. Does every sentence make sense? Is anything repeated? Does the cause-and-effect match what the user said? Fix anything that reads wrong
+
+FORMATTING:
+- Greeting: "Hi [name]," or "Hey [name]," — match the tone
 - Sign-off: end with "Thank you!" or natural closing. NEVER add a name or signature
-- Concise, no fluff. Get to the point
-- Bullet points when listing multiple items
-- Emoji sparingly, only if casual/friendly tone
-- Say "please let us know" or "please let me know" — NEVER "please let you know"
+- Language: Default English. Only match another language if the notes are ENTIRELY in that language
+- Say "please let me know" or "please let us know" — NEVER "please let you know"
 - Subject line: clear, specific, professional
-- Tone: ${toneConfig[tone] || toneConfig.friendly}
-
-CRITICAL — PRESERVE THE USER'S MEANING:
-- The user's notes may be a rough draft. Clean it up but NEVER change the meaning
-- Fix all typos and spelling errors
-- Keep the user's structure and key phrases. Polish, don't rewrite from scratch
-- If the notes look like a near-complete email, stay close to the original wording. Only clean up grammar, typos, and flow
-- Do NOT add information the user didn't mention
-- Do NOT remove key details the user included
-
-CRITICAL — ELIMINATE ALL REDUNDANCY:
-- Read the ENTIRE draft and count how many times each noun, name, or key term appears
-- If ANY noun or term appears MORE THAN ONCE, replace the second (and later) occurrences with a pronoun like "it", "this", "them", "the tool", etc.
-- Example BAD: "hear your thoughts on the categorization... review the categorization" → "categorization" appears TWICE
-- Example GOOD: "hear your thoughts on the categorization... review it" → second occurrence replaced with "it"
-- Example BAD: "I created this Sorting Wizard tool to replace the process for Sorting Wizard" → "Sorting Wizard" appears TWICE
-- Example GOOD: "I created a Sorting Wizard tool to replace our current semi-manual process" → said once
-- This applies to EVERYTHING: tool names, people names, process names, nouns, concepts. If you can replace a repeated word with "it", "this", "them", or rephrase the sentence, DO IT
-- After writing the draft, scan it one more time specifically looking for repeated words. Fix any you find
-
-CRITICAL — SENSE CHECK BEFORE OUTPUT:
-- Before returning the draft, re-read the entire email as if you are the recipient
-- Does every sentence make sense? Is anything confusing, awkward, or contradictory?
-- Does the email flow naturally from one point to the next?
-- If something reads wrong, fix it before outputting
 
 Notes: ${composeNotes}`;
       const raw = await callAI(composePrompt, 800, controller.signal);
