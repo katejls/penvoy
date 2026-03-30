@@ -1707,6 +1707,16 @@ Notes: ${composeNotes}`;
         )}
       </div>
 
+      {/* App Footer */}
+      <div style={{ padding: "24px", textAlign: "center", borderTop: "1px solid rgba(255,255,255,0.06)", marginTop: 40 }}>
+        <p style={{ fontSize: 12, color: "#4a4e64" }}>
+          Questions or issues? <a href="mailto:hello@7starelite.com" style={{ color: "#818cf8", textDecoration: "none" }}>hello@7starelite.com</a>
+        </p>
+        <p style={{ fontSize: 11, color: "#3a3e54", marginTop: 8 }}>
+          © {new Date().getFullYear()} Penvoy by 7Star Elite. All rights reserved.
+        </p>
+      </div>
+
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }
         @keyframes fadeUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
