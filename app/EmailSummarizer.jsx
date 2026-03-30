@@ -933,7 +933,7 @@ Notes: ${composeNotes}`;
               { icon: "⚡", title: "Instant Summaries", desc: "Paste any email, get bullet-point summary + action items" },
               { icon: "💬", title: "Thread Analysis", desc: "Find who needs your reply and what's still open" },
               { icon: "✍️", title: "Smart Drafting", desc: "Draft replies and new emails in your writing style" },
-              { icon: "⏱️", title: "48h SLA Tracker", desc: "Never miss a response deadline again" },
+              { icon: "⏱️", title: "SLA Tracker", desc: "Set your own SLA window and never miss a response deadline" },
               { icon: "🎨", title: "5 Tone Presets", desc: "Friendly, Formal, Casual, Empathetic, or Direct" },
               { icon: "🔑", title: "BYOK — Your Key", desc: "Works with Claude or GPT-4o. Your key, your data" },
             ].map((f, i) => (
@@ -1381,7 +1381,7 @@ Notes: ${composeNotes}`;
         {/* ===== SINGLE EMAIL RESULTS ===== */}
         {mode === "single" && summary && (
           <div ref={resultsRef} style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-            {sla && <SlaBar sla={sla} />}
+            {sla && <SlaBar sla={sla} slaHours={slaHours} />}
             <div style={cardStyle}>
               <CardHeader title="Summary" dot="#6366f1">
                 <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -1425,7 +1425,7 @@ Notes: ${composeNotes}`;
         {/* ===== THREAD RESULTS ===== */}
         {mode === "thread" && threadResult && (
           <div ref={resultsRef} style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-            {sla && <SlaBar sla={sla} />}
+            {sla && <SlaBar sla={sla} slaHours={slaHours} />}
 
             {/* Verdict Banner */}
             {threadResult.verdict && (
@@ -1697,7 +1697,7 @@ const cardStyle = {
   borderRadius: 16, padding: 24, animation: "fadeUp 0.4s ease-out",
 };
 
-function SlaBar({ sla }) {
+function SlaBar({ sla, slaHours }) {
   return (
     <div style={{
       background: sla.bg, border: `1px solid ${sla.border}`,
@@ -1711,7 +1711,7 @@ function SlaBar({ sla }) {
           <span style={{
             fontSize: 13, fontWeight: 700, color: sla.color,
             textTransform: "uppercase", letterSpacing: "0.04em",
-          }}>48H SLA</span>
+          }}>{slaHours || 48}H SLA</span>
           <span style={{
             fontSize: 12, fontWeight: 600, padding: "2px 10px", borderRadius: 20,
             background: `${sla.color}18`, color: sla.color, border: `1px solid ${sla.color}33`,
