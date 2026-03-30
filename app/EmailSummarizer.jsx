@@ -682,13 +682,21 @@ export default function EmailSummarizer() {
 
       const prompt = mode === "thread"
         ? `Analyze thread for "${u}". ONLY valid JSON, no markdown.
-Current time: ${currentDateTime}. Messages FROM ${u} are ${u}'s own.
-{"subject_guess":"subject","participants":["name"],"message_count":0,"bullet_summary":["short phrase"],"resolved_items":["done"],"my_open_items":["${u}'s task"],"others_pending":[{"name":"Person","items":["task"]}],"verdict":"close|action_needed","verdict_summary":"short phrase","sla_status":"pending|replied","reply_points":[{"to":"person","context":"why","type":"direct|group","draft":"reply text"}]}
+Current time: ${currentDateTime}.
+
+CRITICAL — IDENTIFY THE USER:
+- The user is "${u}". In Gmail-pasted threads, the word "me" in recipient lists (e.g. "to Nikki, me, Clarice") means "${u}". So "me" = "${u}".
+- Messages FROM "${u}" are the user's own messages. Messages where "me" appears in the "to" or "cc" line mean ${u} received that message.
+- If you see NO message sent FROM "${u}" (or "me" as sender), then ${u} has NOT replied to this thread at all.
+
+{"subject_guess":"subject","participants":["name"],"message_count":0,"bullet_summary":["short phrase"],"resolved_items":["done"],"my_open_items":["${u}'s task"],"others_pending":[{"name":"Person","items":["task"]}],"verdict":"close|action_needed|fyi_only","verdict_summary":"short phrase","sla_status":"pending|replied|fyi","reply_points":[{"to":"person","context":"why","type":"direct|group","draft":"reply text"}]}
 RULES:
 - ALL string arrays: short phrases, NOT sentences
 - verdict_summary: short phrase not a sentence
-- sla_status: "pending" if ANY message after ${u}'s last reply is directed at ${u} and unanswered. "replied" only if ${u} addressed everything
-- reply_points: each unanswered msg to ${u}. Consolidate if same person asks same thing in direct + group. Only separate for genuinely different topics. type: "direct"=sent only to ${u}, "group"=group email
+- verdict: use "fyi_only" if ${u} is just CC'd for awareness and no one directly asked ${u} anything. use "action_needed" if someone asked ${u} a question or assigned ${u} a task. use "close" if everything is resolved
+- sla_status: Look for messages actually sent BY "${u}" (as the sender/author, NOT just in the recipient list). "replied" ONLY if ${u} actually wrote and sent a message in this thread. "pending" if ${u} has NOT sent any message OR if someone asked ${u} something after ${u}'s last message. "fyi" if ${u} is only CC'd and no response is expected
+- reply_points: ONLY create reply points if someone specifically asked ${u} a question, assigned ${u} a task, or ${u} needs to respond. Do NOT create reply points for FYI/alignment threads where ${u} is just CC'd. If the thread is just people acknowledging/agreeing ("Copy", "Got this", "100% agree"), ${u} probably doesn't need to reply
+- Consolidate if same person asks same thing in direct + group. type: "direct"=sent only to ${u}, "group"=group email
 ${styleRules}${replyContext ? `\nUser note: ${replyContext}` : ""}
 
 Thread:
@@ -726,6 +734,16 @@ ${processedText}`;
             border: "rgba(34,197,94,0.2)",
             icon: "✅",
             tip: "You've already responded. No action needed for SLA.",
+          });
+        } else if (sla_status === "fyi") {
+          setSla({
+            status: "fyi",
+            label: "FYI only — no reply needed",
+            color: "#818cf8",
+            bg: "rgba(129,140,248,0.08)",
+            border: "rgba(129,140,248,0.2)",
+            icon: "📋",
+            tip: "You're CC'd for awareness. No response expected.",
           });
         } else {
           const parsedDate = extractLastDateFromThread(emailText);
