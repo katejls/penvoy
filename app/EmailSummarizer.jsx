@@ -823,7 +823,7 @@ From: ${userName || "me"}
 ONLY valid JSON: {"subject":"clear specific subject line","body":"email body"}
 RULES:
 - Language: Default to English. Only use another language if the user's notes are ENTIRELY in that language. When in doubt, English
-- Greeting: "Hi [name]," or "Hey [name]," — "Hey" for casual/friendly, "Hi" for formal. If no recipient name, start with "Hi,"
+- Greeting: "Hi [name]," or "Hey [name]," — "Hey" for casual/friendly, "Hi" for formal. If no recipient name, start with "Hi," or "Hey,"
 - Sign-off: end with "Thank you!" or natural closing. NEVER add a name or signature
 - Concise, no fluff. Get to the point
 - Bullet points when listing multiple items
@@ -831,8 +831,28 @@ RULES:
 - Say "please let us know" or "please let me know" — NEVER "please let you know"
 - Subject line: clear, specific, professional
 - Tone: ${toneConfig[tone] || toneConfig.friendly}
+
+CRITICAL — PRESERVE THE USER'S MEANING:
+- The user's notes may be a rough draft. Clean it up but NEVER change the meaning
+- Fix all typos and spelling errors
+- Keep the user's structure and key phrases. Polish, don't rewrite from scratch
+- If the notes look like a near-complete email, stay close to the original wording. Only clean up grammar, typos, and flow
+- Do NOT add information the user didn't mention
+- Do NOT remove key details the user included
+
+CRITICAL — ELIMINATE ALL REDUNDANCY:
+- Read the draft carefully. If ANY word, name, tool name, phrase, or idea appears more than once and doesn't need to, consolidate or remove the duplicate
+- Example: "I created this Sorting Wizard tool to replace the process for Sorting Wizard" → "Sorting Wizard" is said twice. Fix: "I created a Sorting Wizard tool to replace the current process"
+- This applies to everything: product names, people's names, action words, descriptions. If it's repeated and doesn't add new meaning, cut it
+
+CRITICAL — SENSE CHECK BEFORE OUTPUT:
+- Before returning the draft, re-read the entire email as if you are the recipient
+- Does every sentence make sense? Is anything confusing, awkward, or contradictory?
+- Does the email flow naturally from one point to the next?
+- If something reads wrong, fix it before outputting
+
 Notes: ${composeNotes}`;
-      const raw = await callAI(composePrompt, 600, controller.signal);
+      const raw = await callAI(composePrompt, 800, controller.signal);
       clearTimeout(timeout);
       const clean = raw.replace(/```json|```/g, "").trim();
       setComposeResult({ ...JSON.parse(clean), _tone: tone });
