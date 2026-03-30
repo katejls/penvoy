@@ -232,26 +232,38 @@ function extractDateFromEmail(emailText) {
   return null;
 }
 
-// For threads, find the last inbound date (scanning from bottom)
+// For threads, find the LAST/most recent date in the text
 function extractLastDateFromThread(emailText) {
-  // Split by common thread separators — handle multiple Gmail formats
-  // Gmail paste format: "Name LastName\nDate" or "Name <email>\nDate" or "From: Name"
-  const messages = emailText.split(/(?:^|\n)(?=[A-Z][a-zA-Z .]+ (?:<[^>]+>)?\n(?:(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun),? )?(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|\d{1,2}:\d{2}|Today|Yesterday))|(?:^|\n)---+\s*\n|(?:^|\n)From:\s/im);
+  // Strategy 1: Find ALL "X hours/minutes ago" patterns and pick the smallest (most recent)
+  const agoPattern = /(\d+)\s+(hour|minute|min|day)s?\s+ago/gi;
+  let match;
+  let mostRecentDate = null;
+  let smallestAgo = Infinity;
   
-  // Go from last to first, looking for dates
-  for (let i = messages.length - 1; i >= 0; i--) {
-    const d = extractDateFromEmail(messages[i]);
-    if (d && !isNaN(d.getTime())) return d;
+  while ((match = agoPattern.exec(emailText)) !== null) {
+    const n = parseInt(match[1]);
+    const unit = match[2].toLowerCase();
+    let ms;
+    if (unit.startsWith("min")) ms = n * 60000;
+    else if (unit.startsWith("hour")) ms = n * 3600000;
+    else if (unit.startsWith("day")) ms = n * 86400000;
+    else continue;
+    if (ms < smallestAgo) {
+      smallestAgo = ms;
+      mostRecentDate = new Date(Date.now() - ms);
+    }
   }
-  
-  // Fallback: scan all lines from bottom to top for any date
+  if (mostRecentDate) return mostRecentDate;
+
+  // Strategy 2: Scan lines bottom-up for any parseable date
   const lines = emailText.split("\n");
   for (let i = lines.length - 1; i >= 0; i--) {
-    const d = parseEmailDate(lines[i]);
+    const line = lines[i].trim();
+    if (!line) continue;
+    const d = parseEmailDate(line);
     if (d && !isNaN(d.getTime())) return d;
   }
-  
-  return extractDateFromEmail(emailText);
+  return null;
 }
 
 function getSlaStatus(sentDate, slaHours = DEFAULT_SLA_HOURS) {
