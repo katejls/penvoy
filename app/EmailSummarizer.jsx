@@ -1030,6 +1030,13 @@ Notes: ${composeNotes}`;
           <p style={{ fontSize: 12, color: "#4a4e64", marginTop: 40 }}>
             Your API key and data stay in your browser. We never see or store them.
           </p>
+          <p style={{ fontSize: 12, color: "#4a4e64", marginTop: 12 }}>
+            Questions, issues, or feedback? Reach us at{" "}
+            <a href="mailto:hello@7starelite.com" style={{ color: "#818cf8", textDecoration: "none" }}>hello@7starelite.com</a>
+          </p>
+          <p style={{ fontSize: 11, color: "#3a3e54", marginTop: 20 }}>
+            © {new Date().getFullYear()} Penvoy by 7Star Elite. All rights reserved.
+          </p>
         </div>
       ) : (<>
 
