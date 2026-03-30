@@ -686,17 +686,32 @@ Current time: ${currentDateTime}.
 
 CRITICAL — IDENTIFY THE USER:
 - The user is "${u}". In Gmail-pasted threads, the word "me" in recipient lists (e.g. "to Nikki, me, Clarice") means "${u}". So "me" = "${u}".
-- Messages FROM "${u}" are the user's own messages. Messages where "me" appears in the "to" or "cc" line mean ${u} received that message.
-- If you see NO message sent FROM "${u}" (or "me" as sender), then ${u} has NOT replied to this thread at all.
+- Messages where "${u}" or "me" appears as the SENDER (e.g. "${u} <email>" at the top of a message, or "${u}" followed by a date) are messages ${u} WROTE.
+- Messages where "me" only appears in the "to" or "cc" line mean ${u} RECEIVED that message but did NOT write it.
+
+HOW TO DETERMINE SLA STATUS:
+1. Scan the ENTIRE thread chronologically
+2. Find ${u}'s LAST sent message (if any)
+3. After that message, did ANYONE ask ${u} a question, @mention ${u}, or request something from ${u}?
+4. If YES → sla_status = "pending"
+5. If ${u} never sent a message at all → sla_status = "pending"
+6. If ${u}'s last message addressed everything and nobody asked anything new after → sla_status = "replied"
+
+HOW TO DETECT IF ${u} NEEDS TO RESPOND:
+- Scan the ENTIRE thread, not just the last message
+- Look for @mentions of ${u} (like "@${u}")
+- Look for direct questions TO ${u} (like "${u}, can you..." or "please feel free to override @${u}")
+- Look for messages sent ONLY to ${u} (private replies within the thread)
+- Look for open questions that ${u} hasn't answered yet, even if asked earlier in the thread
+- Even if the LAST message doesn't mention ${u}, there may be EARLIER unanswered questions
+- "fyi_only" should ONLY be used if ${u} was NEVER mentioned, @tagged, or asked anything in the ENTIRE thread
 
 {"subject_guess":"subject","participants":["name"],"message_count":0,"bullet_summary":["short phrase"],"resolved_items":["done"],"my_open_items":["${u}'s task"],"others_pending":[{"name":"Person","items":["task"]}],"verdict":"close|action_needed|fyi_only","verdict_summary":"short phrase","sla_status":"pending|replied|fyi","reply_points":[{"to":"person","context":"why","type":"direct|group","draft":"reply text"}]}
 RULES:
 - ALL string arrays: short phrases, NOT sentences
 - verdict_summary: short phrase not a sentence
-- verdict: use "fyi_only" if ${u} is just CC'd for awareness and no one directly asked ${u} anything. use "action_needed" if someone asked ${u} a question or assigned ${u} a task. use "close" if everything is resolved
-- sla_status: Look for messages actually sent BY "${u}" (as the sender/author, NOT just in the recipient list). "replied" ONLY if ${u} actually wrote and sent a message in this thread. "pending" if ${u} has NOT sent any message OR if someone asked ${u} something after ${u}'s last message. "fyi" if ${u} is only CC'd and no response is expected
-- reply_points: ONLY create reply points if someone specifically asked ${u} a question, assigned ${u} a task, or ${u} needs to respond. Do NOT create reply points for FYI/alignment threads where ${u} is just CC'd. If the thread is just people acknowledging/agreeing ("Copy", "Got this", "100% agree"), ${u} probably doesn't need to reply
-- Consolidate if same person asks same thing in direct + group. type: "direct"=sent only to ${u}, "group"=group email
+- verdict: "fyi_only" ONLY if ${u} was never mentioned/asked anything in the ENTIRE thread. "action_needed" if anyone @mentioned ${u}, asked ${u} a question, or requested ${u}'s input at ANY point and it's still unaddressed. "close" if everything directed at ${u} has been resolved
+- reply_points: create for each unanswered question/request directed at ${u} throughout the ENTIRE thread. Consolidate if same topic. type: "direct"=sent only to ${u}, "group"=group email
 ${styleRules}${replyContext ? `\nUser note: ${replyContext}` : ""}
 
 Thread:
@@ -711,7 +726,7 @@ ${styleRules}${replyContext ? `\nUser note: ${replyContext}` : ""}
 Email:
 ${processedText}`;
 
-      const rawText = await callAI(prompt, 1200, controller.signal);
+      const rawText = await callAI(prompt, 2000, controller.signal);
       clearTimeout(timeout);
       const clean = rawText.replace(/```json|```/g, "").trim();
       const parsed = JSON.parse(clean);
