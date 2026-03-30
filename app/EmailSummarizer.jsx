@@ -395,7 +395,7 @@ export default function EmailSummarizer() {
     })();
   }, []);
 
-  // License validation — replace with LemonSqueezy API call in production
+  // License validation via LemonSqueezy API
   const MASTER_KEY = "PENVOY-KATE-2026";
   const validateLicense = async () => {
     setLicenseError("");
@@ -407,15 +407,25 @@ export default function EmailSummarizer() {
       try { localStorage.setItem("penvoy_license_key", licenseKey.trim()); } catch {}
       return;
     }
-    // TODO: Replace with LemonSqueezy API validation:
-    // const res = await fetch("https://api.lemonsqueezy.com/v1/licenses/validate", { ... })
-    // For now, accept any key that's 8+ characters as valid
-    if (licenseKey.trim().length >= 8) {
-      setIsLicensed(true);
-      setShowLanding(false);
-      try { localStorage.setItem("penvoy_license_key", licenseKey.trim()); } catch {}
-    } else {
-      setLicenseError("Invalid license key. Please check and try again.");
+    // Validate via server-side API route (calls LemonSqueezy)
+    try {
+      setLicenseError("Validating...");
+      const res = await fetch("/api/validate-license", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ license_key: licenseKey.trim() }),
+      });
+      const data = await res.json();
+      if (data.valid) {
+        setIsLicensed(true);
+        setShowLanding(false);
+        setLicenseError("");
+        try { localStorage.setItem("penvoy_license_key", licenseKey.trim()); } catch {}
+      } else {
+        setLicenseError(data.error || "Invalid license key. Please check and try again.");
+      }
+    } catch {
+      setLicenseError("Could not validate. Please check your connection and try again.");
     }
   };
 
@@ -952,7 +962,7 @@ Notes: ${composeNotes}`;
               Lifetime access. No subscription. No hidden fees. Bring your own API key.
             </p>
             <a
-              href="https://lemonsqueezy.com"
+              href="https://penvoy.lemonsqueezy.com/checkout/buy/2b87a55a-22c2-4a0d-9fb8-aa0ff2a0ddb0"
               target="_blank"
               rel="noopener noreferrer"
               style={{
