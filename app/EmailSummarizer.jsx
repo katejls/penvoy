@@ -841,9 +841,14 @@ CRITICAL — PRESERVE THE USER'S MEANING:
 - Do NOT remove key details the user included
 
 CRITICAL — ELIMINATE ALL REDUNDANCY:
-- Read the draft carefully. If ANY word, name, tool name, phrase, or idea appears more than once and doesn't need to, consolidate or remove the duplicate
-- Example: "I created this Sorting Wizard tool to replace the process for Sorting Wizard" → "Sorting Wizard" is said twice. Fix: "I created a Sorting Wizard tool to replace the current process"
-- This applies to everything: product names, people's names, action words, descriptions. If it's repeated and doesn't add new meaning, cut it
+- Read the ENTIRE draft and count how many times each noun, name, or key term appears
+- If ANY noun or term appears MORE THAN ONCE, replace the second (and later) occurrences with a pronoun like "it", "this", "them", "the tool", etc.
+- Example BAD: "hear your thoughts on the categorization... review the categorization" → "categorization" appears TWICE
+- Example GOOD: "hear your thoughts on the categorization... review it" → second occurrence replaced with "it"
+- Example BAD: "I created this Sorting Wizard tool to replace the process for Sorting Wizard" → "Sorting Wizard" appears TWICE
+- Example GOOD: "I created a Sorting Wizard tool to replace our current semi-manual process" → said once
+- This applies to EVERYTHING: tool names, people names, process names, nouns, concepts. If you can replace a repeated word with "it", "this", "them", or rephrase the sentence, DO IT
+- After writing the draft, scan it one more time specifically looking for repeated words. Fix any you find
 
 CRITICAL — SENSE CHECK BEFORE OUTPUT:
 - Before returning the draft, re-read the entire email as if you are the recipient
