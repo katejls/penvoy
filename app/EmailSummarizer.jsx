@@ -740,7 +740,10 @@ ${processedText}`;
         }
 
         // Client-side SLA: parse date from the actual email text
-        if (sla_status === "replied") {
+        // Cross-check: if AI says "replied" but found reply points, it's actually pending
+        const effectiveSlaStatus = (sla_status === "replied" && reply_points?.length > 0) ? "pending" : sla_status;
+
+        if (effectiveSlaStatus === "replied") {
           setSla({
             status: "cleared",
             label: "SLA met — you've replied",
@@ -750,7 +753,7 @@ ${processedText}`;
             icon: "✅",
             tip: "You've already responded. No action needed for SLA.",
           });
-        } else if (sla_status === "fyi") {
+        } else if (effectiveSlaStatus === "fyi") {
           setSla({
             status: "fyi",
             label: "FYI only — no reply needed",
