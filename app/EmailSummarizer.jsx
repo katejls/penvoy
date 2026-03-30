@@ -234,13 +234,23 @@ function extractDateFromEmail(emailText) {
 
 // For threads, find the last inbound date (scanning from bottom)
 function extractLastDateFromThread(emailText) {
-  // Split by common thread separators
-  const messages = emailText.split(/(?:^|\n)---+\s*\n|(?:^|\n)From:\s/im);
-  // Go from last to first
+  // Split by common thread separators — handle multiple Gmail formats
+  // Gmail paste format: "Name LastName\nDate" or "Name <email>\nDate" or "From: Name"
+  const messages = emailText.split(/(?:^|\n)(?=[A-Z][a-zA-Z .]+ (?:<[^>]+>)?\n(?:(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun),? )?(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|\d{1,2}:\d{2}|Today|Yesterday))|(?:^|\n)---+\s*\n|(?:^|\n)From:\s/im);
+  
+  // Go from last to first, looking for dates
   for (let i = messages.length - 1; i >= 0; i--) {
     const d = extractDateFromEmail(messages[i]);
     if (d && !isNaN(d.getTime())) return d;
   }
+  
+  // Fallback: scan all lines from bottom to top for any date
+  const lines = emailText.split("\n");
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const d = parseEmailDate(lines[i]);
+    if (d && !isNaN(d.getTime())) return d;
+  }
+  
   return extractDateFromEmail(emailText);
 }
 
