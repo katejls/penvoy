@@ -689,7 +689,7 @@ ${filled.map((s, i) => `--- EMAIL ${i + 1} ---\n${s.trim()}`).join("\n\n")}`;
     recognition.lang = "en-US";
     recognitionRef.current = recognition;
 
-    let finalTranscript = replyContext;
+    let finalTranscript = mode === "compose" ? composeNotes : replyContext;
 
     recognition.onresult = (event) => {
       let interim = "";
@@ -701,7 +701,8 @@ ${filled.map((s, i) => `--- EMAIL ${i + 1} ---\n${s.trim()}`).join("\n\n")}`;
           interim = t;
         }
       }
-      setReplyContext(finalTranscript + (interim ? " " + interim : ""));
+      const text = finalTranscript + (interim ? " " + interim : "");
+      if (mode === "compose") { setComposeNotes(text); } else { setReplyContext(text); }
     };
 
     recognition.onerror = (event) => {
@@ -831,14 +832,8 @@ ${filled.map((s, i) => `--- EMAIL ${i + 1} ---\n${s.trim()}`).join("\n\n")}`;
 
       const u = userName || "the user";
 
-      const langRule = replyLanguage === "original"
-        ? "Write the draft reply in the SAME language as the email/thread. If the email is in Spanish, reply in Spanish. If Tagalog, reply in Tagalog. ALWAYS write the summary/analysis in English regardless."
-        : replyLanguage === "english"
-        ? "Default to English. ONLY match another language if the ENTIRE thread/email is written in that language. If mixed languages, use English. When in doubt, use English."
-        : `Write the draft reply in ${replyLanguage}. ALWAYS write the summary/analysis in English regardless.`;
-
       const styleRules = `DRAFT STYLE:
-- Language: ${langRule}
+- Language: ALWAYS draft replies in English. If the email is in another language (Tagalog, Spanish, French, etc.), still understand and summarize it in English, and draft the reply in English
 - Greeting: "Hi [name]," or "Hey [name]," — "Hey" for familiar, "Hi" for others. Match thread formality
 - Sign-off: end with "Thank you!" or natural closing that fits. NEVER add a name/signature after
 - Concise, no fluff or filler. Get to the point
@@ -1085,7 +1080,7 @@ Notes: ${composeNotes}`;
               { icon: "⚡", title: "Instant Summaries", desc: "Paste any email, get bullet-point summary + action items" },
               { icon: "💬", title: "Thread Analysis", desc: "Find who needs your reply and what's still open" },
               { icon: "✍️", title: "Learns Your Voice", desc: "Paste sample emails — it matches your writing style in every draft" },
-              { icon: "🌐", title: "Translate & Draft", desc: "Email in any language? Summary in English, reply in theirs" },
+              { icon: "🌐", title: "Any Language In", desc: "Paste emails in any language — summaries and replies always in English" },
               { icon: "📊", title: "Reply Quality Scorer", desc: "Score your draft 1-10 with actionable feedback before sending" },
               { icon: "📄", title: "Cover Letters", desc: "Paste a job listing + your notes — get a tailored cover letter" },
               { icon: "📋", title: "Email Templates", desc: "Quick-load templates for common scenarios — meetings, updates, apologies" },
@@ -1509,6 +1504,21 @@ Notes: ${composeNotes}`;
                   boxSizing: "border-box",
                 }}
               />
+              <button
+                onClick={toggleVoice}
+                title={isListening ? "Stop listening" : "Dictate your notes"}
+                style={{
+                  marginTop: 8, padding: "8px 14px", borderRadius: 10, border: "none",
+                  background: isListening ? "rgba(239,68,68,0.2)" : "rgba(165,180,252,0.1)",
+                  color: isListening ? "#f87171" : "#a5b4fc",
+                  fontSize: 13, fontWeight: 600, cursor: "pointer",
+                  display: "inline-flex", alignItems: "center", gap: 6,
+                  fontFamily: "'DM Sans', system-ui, sans-serif",
+                  animation: isListening ? "pulse 1.5s ease-in-out infinite" : "none",
+                }}
+              >
+                {isListening ? "⏹ Stop" : "🎙 Dictate"}
+              </button>
             </div>
 
             {/* Tone selector */}
@@ -1662,32 +1672,6 @@ Notes: ${composeNotes}`;
                     color: tone === t.id ? "#c7d2fe" : "#6b6f8a",
                   }}
                 >{t.label}</button>
-              ))}
-            </div>
-          </div>
-
-          {/* Reply Language */}
-          <div style={{ marginTop: 14 }}>
-            <label style={{ fontSize: 12, fontWeight: 600, color: "#8b8fa3", display: "block", marginBottom: 8 }}>
-              🌐 REPLY LANGUAGE
-            </label>
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              {[
-                { id: "english", label: "English" },
-                { id: "original", label: "Match email language" },
-                { id: "Spanish", label: "Spanish" },
-                { id: "Tagalog", label: "Tagalog" },
-                { id: "French", label: "French" },
-                { id: "Japanese", label: "Japanese" },
-                { id: "Korean", label: "Korean" },
-              ].map((l) => (
-                <button key={l.id} onClick={() => setReplyLanguage(l.id)} style={{
-                  padding: "7px 14px", borderRadius: 10, fontSize: 12, fontWeight: 600,
-                  cursor: "pointer", fontFamily: "'DM Sans', system-ui, sans-serif",
-                  background: replyLanguage === l.id ? "rgba(16,163,127,0.2)" : "rgba(255,255,255,0.03)",
-                  border: replyLanguage === l.id ? "1px solid rgba(16,163,127,0.4)" : "1px solid rgba(255,255,255,0.08)",
-                  color: replyLanguage === l.id ? "#6ee7b7" : "#6b6f8a",
-                }}>{l.label}</button>
               ))}
             </div>
           </div>
