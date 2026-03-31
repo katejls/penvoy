@@ -466,6 +466,8 @@ export default function EmailSummarizer() {
   const [composeType, setComposeType] = useState("new");
   const [composeNotes, setComposeNotes] = useState("");
   const [composeResult, setComposeResult] = useState(null);
+  const [meetingNotes, setMeetingNotes] = useState("");
+  const [meetingResult, setMeetingResult] = useState(null);
   const [licenseKey, setLicenseKey] = useState("");
   const [isLicensed, setIsLicensed] = useState(false);
   const [licenseError, setLicenseError] = useState("");
@@ -636,7 +638,7 @@ ${filled.map((s, i) => `--- EMAIL ${i + 1} ---\n${s.trim()}`).join("\n\n")}`;
         headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
         signal,
         body: JSON.stringify({
-          model: "claude-sonnet-4-6-20260218",
+          model: "claude-sonnet-4-6",
           max_tokens: maxTokens,
           messages: [{ role: "user", content: prompt }],
         }),
@@ -778,6 +780,8 @@ ${filled.map((s, i) => `--- EMAIL ${i + 1} ---\n${s.trim()}`).join("\n\n")}`;
     setComposeType("new");
     setComposeNotes("");
     setComposeResult(null);
+    setMeetingNotes("");
+    setMeetingResult(null);
   };
 
   const loadSample = () => {
@@ -988,6 +992,9 @@ ${processedText}`;
       forward: "Draft a forwarding email with context explaining why",
       decline: "Draft a polite decline/rejection email",
       coverletter: "Write a professional cover letter for a job application. The user will paste the job listing and their background/notes. Match the candidate's experience to the job requirements. Structure: opening (why this role excites them), body (2-3 paragraphs matching their skills to requirements), closing (enthusiasm + call to action). Do NOT use generic filler. Every sentence should reference specific details from the job listing or the candidate's notes. Return as {\"subject\":\"Application for [Role] - [Name]\",\"body\":\"the cover letter\"}",
+      resignation: "Write a professional resignation letter. Keep it respectful, grateful, and brief. Include: the decision to resign, last working day (if mentioned in notes), gratitude for the experience, offer to help with transition. Do NOT burn bridges. Return as {\"subject\":\"Resignation - [Name]\",\"body\":\"the letter\"}",
+      recommendation: "Write a professional email requesting a letter of recommendation. Be specific about what the recommendation is for, why you're asking this person, and what you'd like them to highlight. Make it easy for them to say yes. Return as {\"subject\":\"Recommendation Request\",\"body\":\"the email\"}",
+      formal: "Write a formal professional letter based on the user's notes. This could be a complaint, request, proposal, notice, or any formal correspondence. Use proper business letter structure. Be clear, direct, and professional. Return as {\"subject\":\"clear subject\",\"body\":\"the letter\"}",
     };
 
     try {
@@ -1039,11 +1046,61 @@ Notes: ${composeNotes}`;
     }
   };
 
+  // Meeting-to-Email converter
+  const processMeeting = async () => {
+    if (!meetingNotes.trim()) return;
+    setLoading(true);
+    setLoadingTime(0);
+    loadingInterval.current = setInterval(() => setLoadingTime((t) => t + 1), 1000);
+    setError(null);
+    setMeetingResult(null);
+
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 30000);
+
+      const prompt = `Analyze these meeting notes and generate follow-up emails. Return ONLY valid JSON, no markdown.
+
+{"meeting_summary":"2-3 sentence summary of what was discussed","attendees":["name"],"action_items":[{"person":"name","task":"what they need to do","deadline":"if mentioned"}],"follow_up_emails":[{"to":"person name","subject":"clear subject line","body":"follow-up email body"}]}
+
+RULES:
+- Identify each person mentioned and their action items
+- Generate a SEPARATE follow-up email for each person who has action items
+- Each email should only mention THAT person's action items, not everyone else's
+- Keep emails concise — bullet points for multiple items
+- Greeting: "Hi [name],"
+- Sign-off: "Thank you!" — no signature
+- If no specific person is assigned a task, skip the email for them
+- Subject lines should be specific: "Follow-up: [topic] — Your Action Items"
+${styleProfile ? `\nUSER'S WRITING STYLE:\n${styleProfile}` : ""}
+${userName ? `From: ${userName}` : ""}
+
+Meeting notes:
+${meetingNotes}`;
+
+      const raw = await callAI(prompt, 2000, controller.signal);
+      clearTimeout(timeout);
+      const clean = raw.replace(/```json|```/g, "").trim();
+      setMeetingResult(JSON.parse(clean));
+    } catch (err) {
+      if (err.name === "AbortError") {
+        setError("Timed out — try shorter notes.");
+      } else if (err instanceof SyntaxError) {
+        setError("Got an unexpected response. Please try again.");
+      } else {
+        setError(err.message || "Something went wrong.");
+      }
+    } finally {
+      clearInterval(loadingInterval.current);
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    if ((summary || threadResult || composeResult) && resultsRef.current) {
+    if ((summary || threadResult || composeResult || meetingResult) && resultsRef.current) {
       resultsRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
     }
-  }, [summary, threadResult, composeResult]);
+  }, [summary, threadResult, composeResult, meetingResult]);
 
   const urgencyColor = { low: "#22c55e", medium: "#f59e0b", high: "#ef4444" };
   const sentimentEmoji = { positive: "😊", neutral: "😐", negative: "😟", mixed: "🤔" };
@@ -1095,7 +1152,8 @@ Notes: ${composeNotes}`;
               { icon: "✍️", title: "Learns Your Voice", desc: "Paste sample emails — it matches your writing style in every draft" },
               { icon: "🌐", title: "Any Language In", desc: "Paste emails in any language — summaries and replies always in English" },
               { icon: "📊", title: "Reply Quality Scorer", desc: "Score your draft 1-10 with actionable feedback before sending" },
-              { icon: "📄", title: "Cover Letters", desc: "Paste a job listing + your notes — get a tailored cover letter" },
+              { icon: "📄", title: "Cover Letters & More", desc: "Cover letters, resignations, recommendations, formal letters" },
+              { icon: "📋", title: "Meeting → Emails", desc: "Paste meeting notes — get follow-up emails for each attendee" },
               { icon: "📋", title: "Email Templates", desc: "Quick-load templates for common scenarios — meetings, updates, apologies" },
               { icon: "⏱️", title: "SLA Tracker", desc: "Customizable response deadlines — never miss a reply window" },
               { icon: "🎨", title: "5 Tone Presets", desc: "Friendly, Formal, Casual, Empathetic, or Direct" },
@@ -1417,6 +1475,9 @@ Notes: ${composeNotes}`;
           <div style={pillStyle(mode === "compose")} onClick={() => switchMode("compose")}>
             ✍️&nbsp; Compose
           </div>
+          <div style={pillStyle(mode === "meeting")} onClick={() => switchMode("meeting")}>
+            📋&nbsp; Meeting
+          </div>
         </div>
 
         {/* Input Card */}
@@ -1451,7 +1512,7 @@ Notes: ${composeNotes}`;
               </label>
               <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
                 <input type="text" value={composeTo} onChange={(e) => setComposeTo(e.target.value)}
-                  placeholder={composeType === "coverletter" ? "To: e.g. Hiring Manager, HR Team, recruiter@company.com" : "To: e.g. Jungkook, Namjoon Kim, Supply Chain Team"}
+                  placeholder={composeType === "coverletter" ? "To: e.g. Hiring Manager, HR Team" : composeType === "resignation" ? "To: e.g. Manager, HR Department" : composeType === "recommendation" ? "To: e.g. Holly Ocaya, Former Manager" : "To: e.g. Jungkook, Namjoon Kim, Supply Chain Team"}
                   style={{
                     flex: 1, background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255,255,255,0.08)",
                     borderRadius: 10, padding: "10px 14px", color: "#d1d5e4", fontSize: 13,
@@ -1459,55 +1520,80 @@ Notes: ${composeNotes}`;
                   }}
                 />
               </div>
-              <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
-                {[
-                  { id: "new", label: "📝 New Email" },
-                  { id: "followup", label: "🔔 Follow-up" },
-                  { id: "forward", label: "↗️ Forward" },
-                  { id: "decline", label: "🚫 Decline" },
-                  { id: "coverletter", label: "📄 Cover Letter" },
-                ].map((t) => (
-                  <button key={t.id} onClick={() => setComposeType(t.id)} style={{
-                    padding: "7px 14px", borderRadius: 10, fontSize: 12, fontWeight: 600,
-                    cursor: "pointer",
-                    fontFamily: "'DM Sans', system-ui, sans-serif",
-                    background: composeType === t.id ? "rgba(99,102,241,0.2)" : "rgba(255,255,255,0.03)",
-                    border: composeType === t.id ? "1px solid rgba(99,102,241,0.4)" : "1px solid rgba(255,255,255,0.08)",
-                    color: composeType === t.id ? "#c7d2fe" : "#6b6f8a",
-                  }}>{t.label}</button>
-                ))}
-              </div>
-              {/* Quick Templates */}
-              <div style={{ marginBottom: 14 }}>
-                <label style={{ fontSize: 11, fontWeight: 600, color: "#6b6f8a", display: "block", marginBottom: 6 }}>
-                  📋 QUICK TEMPLATES (click to pre-fill)
-                </label>
-                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                  {[
-                    { label: "Meeting request", notes: "I'd like to schedule a meeting to discuss [topic]. Are you available [time options]?" },
-                    { label: "Status update", notes: "Giving an update on [project]. Here's where we are: [progress]. Next steps: [what's next]. Let me know if you have questions." },
-                    { label: "Introduction", notes: "Introducing [person A] to [person B]. [Person A] works on [what they do] and [Person B] handles [what they do]. I think you two should connect because [reason]." },
-                    { label: "Request approval", notes: "Requesting approval for [what]. Here's the context: [details]. The cost/impact is [amount]. I recommend we proceed because [reason]." },
-                    { label: "Thank you", notes: "Thank you for [what they did]. It really helped with [impact]. I appreciate [specific thing]." },
-                    { label: "Apology", notes: "Apologies for [what happened]. Here's what went wrong: [explanation]. Here's what I'm doing to fix it: [action]. It won't happen again because [prevention]." },
-                    { label: "Bad news", notes: "Unfortunately, [the bad news]. Here's why: [reason]. What we can do instead: [alternative]. Let me know how you'd like to proceed." },
-                    { label: "Escalation", notes: "Escalating [issue] because [reason it needs attention]. Here's the background: [context]. The impact is [what's at risk]. I need [what you're asking for] by [when]." },
-                  ].map((t) => (
-                    <button key={t.label} onClick={() => { setComposeNotes(t.notes); setComposeType("new"); }} style={{
-                      padding: "5px 10px", borderRadius: 7, fontSize: 10, fontWeight: 600,
-                      cursor: "pointer", fontFamily: "'DM Sans', system-ui, sans-serif",
-                      background: "rgba(255,255,255,0.03)",
-                      border: "1px solid rgba(255,255,255,0.08)",
-                      color: "#6b6f8a",
-                    }}>{t.label}</button>
-                  ))}
+              {/* Email Type - Dropdown */}
+              <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: "#6b6f8a", display: "block", marginBottom: 6 }}>TYPE</label>
+                  <select value={composeType} onChange={(e) => setComposeType(e.target.value)} style={{
+                    width: "100%", background: "rgba(0,0,0,0.3)", border: "1px solid rgba(99,102,241,0.2)",
+                    borderRadius: 10, padding: "10px 14px", color: "#c7d2fe", fontSize: 13, fontWeight: 600,
+                    outline: "none", fontFamily: "'DM Sans', system-ui, sans-serif",
+                    cursor: "pointer", appearance: "none",
+                    backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b6f8a' d='M6 8L1 3h10z'/%3E%3C/svg%3E\")",
+                    backgroundRepeat: "no-repeat", backgroundPosition: "right 12px center",
+                  }}>
+                    <option value="new">📝 New Email</option>
+                    <option value="followup">🔔 Follow-up</option>
+                    <option value="forward">↗️ Forward</option>
+                    <option value="decline">🚫 Decline</option>
+                    <option value="coverletter">📄 Cover Letter</option>
+                    <option value="resignation">👋 Resignation</option>
+                    <option value="recommendation">⭐ Recommendation Request</option>
+                    <option value="formal">📜 Formal Letter</option>
+                  </select>
                 </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: "#6b6f8a", display: "block", marginBottom: 6 }}>TONE</label>
+                  <select value={tone} onChange={(e) => setTone(e.target.value)} style={{
+                    width: "100%", background: "rgba(0,0,0,0.3)", border: "1px solid rgba(99,102,241,0.2)",
+                    borderRadius: 10, padding: "10px 14px", color: "#c7d2fe", fontSize: 13, fontWeight: 600,
+                    outline: "none", fontFamily: "'DM Sans', system-ui, sans-serif",
+                    cursor: "pointer", appearance: "none",
+                    backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b6f8a' d='M6 8L1 3h10z'/%3E%3C/svg%3E\")",
+                    backgroundRepeat: "no-repeat", backgroundPosition: "right 12px center",
+                  }}>
+                    <option value="friendly">😊 Friendly</option>
+                    <option value="formal">👔 Formal</option>
+                    <option value="casual">✌️ Casual</option>
+                    <option value="empathetic">💛 Empathetic</option>
+                    <option value="direct">🎯 Direct</option>
+                  </select>
+                </div>
+              </div>
+              {/* Quick Templates - Dropdown */}
+              <div style={{ marginBottom: 14 }}>
+                <label style={{ fontSize: 11, fontWeight: 600, color: "#6b6f8a", display: "block", marginBottom: 6 }}>📋 QUICK TEMPLATE</label>
+                <select
+                  value=""
+                  onChange={(e) => { if (e.target.value) { setComposeNotes(e.target.value); setComposeType("new"); } }}
+                  style={{
+                    width: "100%", background: "rgba(0,0,0,0.3)", border: "1px solid rgba(255,255,255,0.08)",
+                    borderRadius: 10, padding: "10px 14px", color: "#8b8fa3", fontSize: 13,
+                    outline: "none", fontFamily: "'DM Sans', system-ui, sans-serif",
+                    cursor: "pointer", appearance: "none",
+                    backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b6f8a' d='M6 8L1 3h10z'/%3E%3C/svg%3E\")",
+                    backgroundRepeat: "no-repeat", backgroundPosition: "right 12px center",
+                  }}
+                >
+                  <option value="">Select a template to pre-fill...</option>
+                  <option value={"I'd like to schedule a meeting to discuss [topic].\n\nAre you available on any of the following?\n- [Option 1]\n- [Option 2]\n- [Option 3]\n\nPlease let me know what works best."}>Meeting request</option>
+                  <option value={"Giving an update on [project].\n\nHere's where we are:\n- [Progress point 1]\n- [Progress point 2]\n\nNext steps:\n- [What's next]\n- [Timeline]\n\nLet me know if you have questions."}>Status update</option>
+                  <option value={"I'd like to introduce you to [person].\n\n[Person A] works on [what they do].\n[Person B] handles [what they do].\n\nI think you two should connect because [reason]."}>Introduction</option>
+                  <option value={"Requesting approval for [what].\n\nContext:\n- [Detail 1]\n- [Detail 2]\n\nCost/impact: [amount]\n\nI recommend we proceed because [reason]. Please let me know if you have any questions."}>Request approval</option>
+                  <option value={"Thank you for [what they did].\n\nIt really helped with [impact].\n\nI appreciate [specific thing]."}>Thank you</option>
+                  <option value={"Apologies for [what happened].\n\nWhat went wrong:\n- [Explanation]\n\nWhat I'm doing to fix it:\n- [Action 1]\n- [Action 2]\n\nThis won't happen again because [prevention]."}>Apology</option>
+                  <option value={"Unfortunately, [the bad news].\n\nReason: [why]\n\nWhat we can do instead:\n- [Alternative 1]\n- [Alternative 2]\n\nLet me know how you'd like to proceed."}>Bad news</option>
+                  <option value={"Escalating [issue] because [reason it needs attention].\n\nBackground:\n- [Context point 1]\n- [Context point 2]\n\nImpact: [what's at risk]\n\nI need [what you're asking for] by [when]."}>Escalation</option>
+                </select>
               </div>
               <textarea
                 value={composeNotes}
                 onChange={(e) => setComposeNotes(e.target.value)}
-                placeholder={composeType === "coverletter"
-                  ? "Paste the job listing here, then add your background...\n\ne.g. \"Job: Senior Operations Manager at Shopify. Requirements: 5+ years operations, team management, process automation.\n\nMy background: 6 years in e-commerce operations, managed team of 12 VAs, built automation tools, experienced with Amazon FBA and supply chain.\""
+                placeholder={
+                  composeType === "coverletter" ? "Paste the job listing here, then add your background...\n\ne.g. \"Job: Senior Operations Manager at Shopify. Requirements: 5+ years operations, team management.\n\nMy background: 6 years in e-commerce ops, managed 12 VAs, built automation tools.\""
+                  : composeType === "resignation" ? "Your resignation details...\n\ne.g. \"I'm resigning from my position as Operations Manager. My last day will be April 30. I've been here 3 years. I want to thank my team and manager Holly for the growth opportunities.\""
+                  : composeType === "recommendation" ? "Who you're asking and what for...\n\ne.g. \"Asking my manager Holly for a recommendation for a Senior Ops role at Shopify. I'd like her to highlight my process automation work and team leadership.\""
+                  : composeType === "formal" ? "What the letter is about...\n\ne.g. \"Formal complaint to the landlord about the broken AC unit. It's been 3 weeks since we reported it. We need it fixed by Friday or we'll escalate.\""
                   : "Just dump your thoughts here in plain language...\n\ne.g. \"tell Hoseok we can't accept deliveries right now, be vague about when we'll start again. CC Yoongi Min since he handles warehouse logistics\""}
                 style={{
                   width: "100%", minHeight: 150, background: "rgba(0,0,0,0.3)",
@@ -1534,28 +1620,6 @@ Notes: ${composeNotes}`;
               </button>
             </div>
 
-            {/* Tone selector */}
-            <div style={{ marginBottom: 14 }}>
-              <label style={{ fontSize: 12, fontWeight: 600, color: "#8b8fa3", display: "block", marginBottom: 8 }}>TONE</label>
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                {[
-                  { id: "friendly", label: "😊 Friendly" },
-                  { id: "formal", label: "👔 Formal" },
-                  { id: "casual", label: "✌️ Casual" },
-                  { id: "empathetic", label: "💛 Empathetic" },
-                  { id: "direct", label: "🎯 Direct" },
-                ].map((t) => (
-                  <button key={t.id} onClick={() => { setTone(t.id); }} style={{
-                    padding: "7px 14px", borderRadius: 10, fontSize: 12, fontWeight: 600,
-                    cursor: "pointer", fontFamily: "'DM Sans', system-ui, sans-serif",
-                    background: tone === t.id ? "rgba(99,102,241,0.2)" : "rgba(255,255,255,0.03)",
-                    border: tone === t.id ? "1px solid rgba(99,102,241,0.4)" : "1px solid rgba(255,255,255,0.08)",
-                    color: tone === t.id ? "#c7d2fe" : "#6b6f8a",
-                  }}>{t.label}</button>
-                ))}
-              </div>
-            </div>
-
             <button
               onClick={composeEmail}
               disabled={loading || !composeNotes.trim()}
@@ -1580,8 +1644,53 @@ Notes: ${composeNotes}`;
                   }} />
                   Drafting... {loadingTime}s
                 </span>
-              ) : composeResult ? "🔄 Re-draft" : composeType === "coverletter" ? "📄 Generate Cover Letter" : "✍️ Draft Email"}
+              ) : composeResult ? "🔄 Re-draft" : composeType === "coverletter" ? "📄 Generate Cover Letter" : composeType === "resignation" ? "👋 Generate Resignation" : composeType === "recommendation" ? "⭐ Generate Request" : composeType === "formal" ? "📜 Generate Letter" : "✍️ Draft Email"}
             </button>
+          </>) : mode === "meeting" ? (<>
+          {/* Meeting mode inputs */}
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ fontSize: 14, fontWeight: 600, color: "#a5b4fc", letterSpacing: "0.02em", marginBottom: 10, display: "block" }}>
+              📋 PASTE MEETING NOTES
+            </label>
+            <textarea
+              value={meetingNotes}
+              onChange={(e) => setMeetingNotes(e.target.value)}
+              placeholder={"Paste your meeting notes, agenda, or transcript...\n\ne.g. \"Meeting with Pao, Anne, and Michael about Kill Eval process.\n\nDecisions:\n- Anne will tag killed ASINs as Dead in 1a\n- Deadline: April 6\n- Pao will provide the list from Kill Ledger\n- Michael to track attached cores\n- Need to confirm with Holly about Column H updates\""}
+              style={{
+                width: "100%", minHeight: 200, background: "rgba(0,0,0,0.3)",
+                border: "1px solid rgba(255,255,255,0.08)", borderRadius: 12,
+                padding: 16, color: "#d1d5e4", fontSize: 14, lineHeight: 1.7,
+                resize: "vertical", outline: "none", fontFamily: "'DM Sans', system-ui, sans-serif",
+                boxSizing: "border-box",
+              }}
+            />
+          </div>
+          <button
+            onClick={processMeeting}
+            disabled={loading || !meetingNotes.trim()}
+            style={{
+              width: "100%", padding: "14px 24px",
+              background: loading || !meetingNotes.trim()
+                ? "rgba(99,102,241,0.2)" : "linear-gradient(135deg, #6366f1, #7c3aed)",
+              border: "none", borderRadius: 12,
+              color: loading || !meetingNotes.trim() ? "#6b6f8a" : "#fff",
+              fontSize: 15, fontWeight: 600,
+              cursor: loading || !meetingNotes.trim() ? "not-allowed" : "pointer",
+              fontFamily: "'DM Sans', system-ui, sans-serif",
+            }}
+          >
+            {loading ? (
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                <span style={{
+                  width: 16, height: 16,
+                  border: "2px solid rgba(255,255,255,0.2)", borderTopColor: "#fff",
+                  borderRadius: "50%", display: "inline-block",
+                  animation: "spin 0.8s linear infinite",
+                }} />
+                Analyzing... {loadingTime}s
+              </span>
+            ) : "📋 Generate Follow-up Emails"}
+          </button>
           </>) : (<>
           {/* Existing analyze inputs */}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
@@ -2026,6 +2135,93 @@ Notes: ${composeNotes}`;
             </div>
           </div>
         )}
+
+        {/* ===== MEETING RESULTS ===== */}
+        {mode === "meeting" && meetingResult && (
+          <div ref={resultsRef} style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+            {/* Meeting Summary */}
+            <div style={cardStyle}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: "#a5b4fc", marginBottom: 12 }}>📋 Meeting Summary</div>
+              <p style={{ fontSize: 13, color: "#d1d5e4", lineHeight: 1.6, margin: 0 }}>{meetingResult.meeting_summary}</p>
+              {meetingResult.attendees?.length > 0 && (
+                <div style={{ marginTop: 12 }}>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: "#6b6f8a" }}>Attendees: </span>
+                  <span style={{ fontSize: 12, color: "#8b8fa3" }}>{meetingResult.attendees.join(", ")}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Action Items */}
+            {meetingResult.action_items?.length > 0 && (
+              <div style={cardStyle}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "#f59e0b", marginBottom: 12 }}>⚡ Action Items</div>
+                {meetingResult.action_items.map((item, idx) => (
+                  <div key={idx} style={{
+                    padding: "10px 14px", marginBottom: 8,
+                    background: "rgba(245,158,11,0.05)", border: "1px solid rgba(245,158,11,0.1)",
+                    borderRadius: 10, display: "flex", gap: 10, alignItems: "flex-start",
+                  }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: "#fbbf24", flexShrink: 0 }}>{item.person}:</span>
+                    <span style={{ fontSize: 12, color: "#d1d5e4", lineHeight: 1.5 }}>
+                      {item.task}{item.deadline ? ` (by ${item.deadline})` : ""}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Follow-up Emails */}
+            {meetingResult.follow_up_emails?.length > 0 && (
+              <div style={cardStyle}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "#22c55e", marginBottom: 16 }}>✉️ Follow-up Emails ({meetingResult.follow_up_emails.length})</div>
+                {meetingResult.follow_up_emails.map((email, idx) => (
+                  <div key={idx} style={{
+                    padding: 18, marginBottom: 14,
+                    background: "rgba(34,197,94,0.04)", border: "1px solid rgba(34,197,94,0.1)",
+                    borderRadius: 12,
+                  }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                      <div>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: "#6b6f8a" }}>To: </span>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: "#e0e7ff" }}>{email.to}</span>
+                      </div>
+                      <button onClick={() => handleCopy((email.subject ? "Subject: " + email.subject + "\n\n" : "") + email.body, `meeting-${idx}`)} style={{
+                        fontSize: 11, fontWeight: 600, padding: "5px 12px", borderRadius: 7,
+                        cursor: "pointer", fontFamily: "'DM Sans', system-ui, sans-serif",
+                        background: copied === `meeting-${idx}` ? "rgba(34,197,94,0.15)" : "rgba(167,139,250,0.12)",
+                        border: `1px solid ${copied === `meeting-${idx}` ? "rgba(34,197,94,0.3)" : "rgba(167,139,250,0.25)"}`,
+                        color: copied === `meeting-${idx}` ? "#86efac" : "#c4b5fd",
+                      }}>{copied === `meeting-${idx}` ? "✓ Copied!" : "📋 Copy"}</button>
+                    </div>
+                    {email.subject && (
+                      <div style={{ fontSize: 12, color: "#8b8fa3", marginBottom: 8 }}>Subject: {email.subject}</div>
+                    )}
+                    <textarea
+                      value={email.body}
+                      onChange={(e) => {
+                        const updated = [...meetingResult.follow_up_emails];
+                        updated[idx] = { ...updated[idx], body: e.target.value };
+                        setMeetingResult({ ...meetingResult, follow_up_emails: updated });
+                      }}
+                      style={{
+                        width: "100%", minHeight: 120, background: "rgba(0,0,0,0.2)",
+                        border: "1px solid rgba(255,255,255,0.06)", borderRadius: 8,
+                        padding: 12, color: "#d1d5e4", fontSize: 13, lineHeight: 1.6,
+                        resize: "vertical", outline: "none",
+                        fontFamily: "'DM Sans', system-ui, sans-serif", boxSizing: "border-box",
+                      }}
+                    />
+                    <ReplyAdjuster draft={email.body} onUpdate={(newBody) => {
+                      const updated = [...meetingResult.follow_up_emails];
+                      updated[idx] = { ...updated[idx], body: newBody };
+                      setMeetingResult({ ...meetingResult, follow_up_emails: updated });
+                    }} callAI={callAI} />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* App Footer */}
@@ -2044,6 +2240,8 @@ Notes: ${composeNotes}`;
         @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.7; transform: scale(1.08); } }
         textarea::placeholder, input::placeholder { color: #4a4e64; }
         textarea:focus, input:focus { border-color: rgba(165,180,252,0.3) !important; }
+        select { color: #c7d2fe; }
+        select option { background: #1a1d2e; color: #d1d5e4; padding: 8px; }
       `}</style>
       </>)}
     </div>
