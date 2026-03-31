@@ -315,8 +315,14 @@ function ReplyAdjuster({ draft, onUpdate, callAI: callAIProp }) {
     if (!adj.trim() || !callAIProp) return;
     setBusy(true);
     try {
-      const prompt = `Change: "${adj}"\nKeep same greeting/structure. Keep same language as the draft. End with "Thank you!" or similar, no signature. Say "please let us know" not "let you know". Rewrite ONLY the reply:\n${draft}`;
-      const result = await callAIProp(prompt, 250);
+      const prompt = `You are an email rewriting assistant. Follow the user's instruction EXACTLY. If they say "make it shorter", make it significantly shorter. If they say "2 paragraphs", output exactly 2 paragraphs. If they say "less formal", make it noticeably more casual. Do exactly what they ask.
+
+Instruction: "${adj}"
+Keep same greeting style. Keep same language. End with "Thank you!" or similar, no signature. Say "please let us know" not "let you know".
+Rewrite ONLY the reply, output nothing else:
+
+${draft}`;
+      const result = await callAIProp(prompt, 500);
       if (result.trim()) { onUpdate(result.trim()); setAdj(""); }
     } catch {
       onUpdate(draft + "\n\n[TODO: " + adj + "]");
@@ -325,26 +331,33 @@ function ReplyAdjuster({ draft, onUpdate, callAI: callAIProp }) {
   };
 
   return (
-    <div style={{ marginTop: 10, display: "flex", gap: 8, alignItems: "center" }}>
-      <input
-        type="text" value={adj} onChange={(e) => setAdj(e.target.value)}
-        placeholder="Adjust reply — e.g. it falls on Genius Lab to handle this"
-        onKeyDown={(e) => { if (e.key === "Enter" && adj.trim() && !busy) doRegenerate(); }}
-        style={{
-          flex: 1, background: "rgba(0,0,0,0.2)", border: "1px solid rgba(99,102,241,0.15)",
-          borderRadius: 8, padding: "8px 12px", color: "#d1d5e4", fontSize: 12,
-          outline: "none", fontFamily: "'DM Sans', system-ui, sans-serif",
-        }}
-      />
-      <button onClick={doRegenerate} disabled={!adj.trim() || busy} style={{
-        fontSize: 12, fontWeight: 600, padding: "8px 12px", borderRadius: 8,
-        cursor: !adj.trim() || busy ? "not-allowed" : "pointer",
-        background: "rgba(99,102,241,0.15)", border: "1px solid rgba(99,102,241,0.25)",
-        color: "#c7d2fe", opacity: !adj.trim() ? 0.4 : 1, flexShrink: 0,
-        fontFamily: "'DM Sans', system-ui, sans-serif",
-      }}>
-        {busy ? "..." : "🔄"}
-      </button>
+    <div style={{ marginTop: 12 }}>
+      <label style={{ fontSize: 11, fontWeight: 600, color: "#6b6f8a", display: "block", marginBottom: 6 }}>
+        ✏️ ADJUST — tell the AI what to change
+      </label>
+      <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+        <textarea
+          value={adj} onChange={(e) => setAdj(e.target.value)}
+          placeholder={"Try any instruction:\n• \"make it shorter, max 2 paragraphs\"\n• \"less formal, more conversational\"\n• \"add a bullet list of the action items\"\n• \"mention that deadline is Friday\""}
+          onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && adj.trim() && !busy) { e.preventDefault(); doRegenerate(); } }}
+          style={{
+            flex: 1, background: "rgba(0,0,0,0.2)", border: "1px solid rgba(99,102,241,0.15)",
+            borderRadius: 10, padding: "10px 14px", color: "#d1d5e4", fontSize: 13,
+            lineHeight: 1.5, minHeight: 60, resize: "vertical",
+            outline: "none", fontFamily: "'DM Sans', system-ui, sans-serif",
+          }}
+        />
+        <button onClick={doRegenerate} disabled={!adj.trim() || busy} style={{
+          fontSize: 13, fontWeight: 600, padding: "10px 16px", borderRadius: 10,
+          cursor: !adj.trim() || busy ? "not-allowed" : "pointer",
+          background: !adj.trim() ? "rgba(99,102,241,0.1)" : "linear-gradient(135deg, #6366f1, #7c3aed)",
+          border: "none",
+          color: !adj.trim() ? "#6b6f8a" : "#fff", flexShrink: 0,
+          fontFamily: "'DM Sans', system-ui, sans-serif",
+        }}>
+          {busy ? "Rewriting..." : "🔄 Rewrite"}
+        </button>
+      </div>
     </div>
   );
 }
