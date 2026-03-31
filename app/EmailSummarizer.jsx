@@ -636,7 +636,7 @@ ${filled.map((s, i) => `--- EMAIL ${i + 1} ---\n${s.trim()}`).join("\n\n")}`;
         headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
         signal,
         body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
+          model: "claude-sonnet-4-6-20260218",
           max_tokens: maxTokens,
           messages: [{ role: "user", content: prompt }],
         }),
