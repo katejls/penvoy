@@ -462,7 +462,10 @@ export default function EmailSummarizer() {
   const [showStyleSetup, setShowStyleSetup] = useState(false);
   const [styleSamples, setStyleSamples] = useState(["", "", ""]);
   const [analyzingStyle, setAnalyzingStyle] = useState(false);
-  const [replyLanguage, setReplyLanguage] = useState("english"); // "english", "original", or specific language
+  const [replyLanguage, setReplyLanguage] = useState("english");
+  const [showStylePreview, setShowStylePreview] = useState(false);
+  const [editingStyle, setEditingStyle] = useState(false);
+  const [editStyleText, setEditStyleText] = useState(""); // "english", "original", or specific language
   const recognitionRef = useRef(null);
   const resultsRef = useRef(null);
   const dropdownRef = useRef(null);
@@ -1263,10 +1266,20 @@ Notes: ${composeNotes}`;
             {styleProfile ? (
               <>
                 <span style={{ fontSize: 11, color: "#22c55e", fontWeight: 600 }}>✓ Configured</span>
-                <button onClick={() => setShowStyleSetup(true)} style={{
+                <button onClick={() => setShowStylePreview(!showStylePreview)} style={{
+                  fontSize: 11, fontWeight: 600, padding: "4px 10px", borderRadius: 7,
+                  background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)",
+                  color: "#8b8fa3", cursor: "pointer", fontFamily: "'DM Sans', system-ui, sans-serif",
+                }}>{showStylePreview ? "Hide" : "View"}</button>
+                <button onClick={() => { setEditStyleText(styleProfile); setEditingStyle(true); setShowStylePreview(true); }} style={{
                   fontSize: 11, fontWeight: 600, padding: "4px 10px", borderRadius: 7,
                   background: "rgba(99,102,241,0.1)", border: "1px solid rgba(99,102,241,0.2)",
                   color: "#a5b4fc", cursor: "pointer", fontFamily: "'DM Sans', system-ui, sans-serif",
+                }}>Edit</button>
+                <button onClick={() => setShowStyleSetup(true)} style={{
+                  fontSize: 11, fontWeight: 600, padding: "4px 10px", borderRadius: 7,
+                  background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.2)",
+                  color: "#fbbf24", cursor: "pointer", fontFamily: "'DM Sans', system-ui, sans-serif",
                 }}>Redo</button>
                 <button onClick={clearStyleProfile} style={{
                   fontSize: 11, fontWeight: 600, padding: "4px 10px", borderRadius: 7,
@@ -1282,9 +1295,40 @@ Notes: ${composeNotes}`;
               }}>Set up — paste your sample emails</button>
             )}
           </div>
-          {styleProfile && (
+          {showStylePreview && styleProfile && !editingStyle && (
             <div style={{ marginTop: 8, padding: "10px 14px", background: "rgba(34,197,94,0.05)", border: "1px solid rgba(34,197,94,0.1)", borderRadius: 10 }}>
               <p style={{ fontSize: 11, color: "#6b8f6b", lineHeight: 1.5, margin: 0 }}>{styleProfile}</p>
+            </div>
+          )}
+          {editingStyle && (
+            <div style={{ marginTop: 8 }}>
+              <textarea
+                value={editStyleText}
+                onChange={(e) => setEditStyleText(e.target.value)}
+                style={{
+                  width: "100%", minHeight: 80, background: "rgba(0,0,0,0.3)",
+                  border: "1px solid rgba(99,102,241,0.2)", borderRadius: 10,
+                  padding: 12, color: "#d1d5e4", fontSize: 11, lineHeight: 1.5,
+                  resize: "vertical", outline: "none",
+                  fontFamily: "'DM Sans', system-ui, sans-serif", boxSizing: "border-box",
+                }}
+              />
+              <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                <button onClick={() => {
+                  setStyleProfile(editStyleText.trim());
+                  try { localStorage.setItem("penvoy_style_profile", editStyleText.trim()); } catch {}
+                  setEditingStyle(false);
+                }} style={{
+                  fontSize: 11, fontWeight: 600, padding: "6px 14px", borderRadius: 7,
+                  background: "linear-gradient(135deg, #6366f1, #7c3aed)", border: "none",
+                  color: "#fff", cursor: "pointer", fontFamily: "'DM Sans', system-ui, sans-serif",
+                }}>Save</button>
+                <button onClick={() => { setEditingStyle(false); }} style={{
+                  fontSize: 11, fontWeight: 600, padding: "6px 14px", borderRadius: 7,
+                  background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)",
+                  color: "#6b6f8a", cursor: "pointer", fontFamily: "'DM Sans', system-ui, sans-serif",
+                }}>Cancel</button>
+              </div>
             </div>
           )}
         </div>
