@@ -349,6 +349,81 @@ function ReplyAdjuster({ draft, onUpdate, callAI: callAIProp }) {
   );
 }
 
+function ReplyScorer({ draft, callAI: callAIProp }) {
+  const [score, setScore] = useState(null);
+  const [scoring, setScoring] = useState(false);
+
+  const doScore = async () => {
+    if (!draft?.trim() || !callAIProp) return;
+    setScoring(true);
+    setScore(null);
+    try {
+      const prompt = `Score this email draft on a 1-10 scale. Return ONLY valid JSON, no markdown:
+{"score":8,"clarity":8,"tone":7,"redundancy":9,"professionalism":8,"feedback":"one sentence of actionable feedback","improved":"optional: if score < 7, rewrite the email better. if score >= 7, leave empty string"}
+
+Scoring criteria:
+- clarity: Is the message clear? Does every sentence add value?
+- tone: Is it appropriate for a work email? Not too stiff, not too casual?
+- redundancy: Are there any repeated words, phrases, or ideas? (10 = no redundancy)
+- professionalism: Would this look good if forwarded to a VP or client?
+- feedback: ONE specific, actionable suggestion. Not generic praise
+
+Draft to score:
+${draft}`;
+      const raw = await callAIProp(prompt, 500);
+      const clean = raw.replace(/```json|```/g, "").trim();
+      setScore(JSON.parse(clean));
+    } catch {
+      setScore({ score: 0, feedback: "Couldn't score — please try again." });
+    } finally { setScoring(false); }
+  };
+
+  const scoreColor = (s) => s >= 8 ? "#22c55e" : s >= 6 ? "#fbbf24" : "#f87171";
+
+  return (
+    <div style={{ marginTop: 10 }}>
+      <button onClick={doScore} disabled={scoring || !draft?.trim()} style={{
+        fontSize: 11, fontWeight: 600, padding: "6px 14px", borderRadius: 8,
+        cursor: scoring ? "wait" : "pointer",
+        background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.2)",
+        color: "#fbbf24", fontFamily: "'DM Sans', system-ui, sans-serif",
+      }}>{scoring ? "Scoring..." : "📊 Score this reply"}</button>
+      {score && score.score > 0 && (
+        <div style={{
+          marginTop: 10, padding: "14px 18px", background: "rgba(255,255,255,0.03)",
+          border: `1px solid ${scoreColor(score.score)}33`, borderRadius: 12,
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
+            <span style={{
+              fontSize: 28, fontWeight: 800, color: scoreColor(score.score),
+              fontFamily: "'Fraunces', Georgia, serif",
+            }}>{score.score}/10</span>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {[
+                { label: "Clarity", val: score.clarity },
+                { label: "Tone", val: score.tone },
+                { label: "Redundancy", val: score.redundancy },
+                { label: "Professional", val: score.professionalism },
+              ].map((m) => m.val ? (
+                <span key={m.label} style={{
+                  fontSize: 10, fontWeight: 600, padding: "3px 8px", borderRadius: 6,
+                  background: `${scoreColor(m.val)}15`, color: scoreColor(m.val),
+                  border: `1px solid ${scoreColor(m.val)}30`,
+                }}>{m.label}: {m.val}</span>
+              ) : null)}
+            </div>
+          </div>
+          {score.feedback && <p style={{ fontSize: 12, color: "#d1d5e4", margin: 0, lineHeight: 1.5 }}>💡 {score.feedback}</p>}
+          {score.improved && <div style={{ marginTop: 10, padding: 12, background: "rgba(34,197,94,0.05)", border: "1px solid rgba(34,197,94,0.1)", borderRadius: 8 }}>
+            <p style={{ fontSize: 11, fontWeight: 600, color: "#22c55e", margin: "0 0 6px" }}>Suggested rewrite:</p>
+            <p style={{ fontSize: 12, color: "#d1d5e4", margin: 0, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{score.improved}</p>
+          </div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function EmailSummarizer() {
   const [mode, setMode] = useState("single"); // "single" or "thread"
   const [provider, setProvider] = useState("anthropic"); // "anthropic" or "openai"
@@ -383,6 +458,11 @@ export default function EmailSummarizer() {
   const [licenseError, setLicenseError] = useState("");
   const [showLanding, setShowLanding] = useState(true);
   const [slaHours, setSlaHours] = useState(48);
+  const [styleProfile, setStyleProfile] = useState("");
+  const [showStyleSetup, setShowStyleSetup] = useState(false);
+  const [styleSamples, setStyleSamples] = useState(["", "", ""]);
+  const [analyzingStyle, setAnalyzingStyle] = useState(false);
+  const [replyLanguage, setReplyLanguage] = useState("english"); // "english", "original", or specific language
   const recognitionRef = useRef(null);
   const resultsRef = useRef(null);
   const dropdownRef = useRef(null);
@@ -413,6 +493,10 @@ export default function EmailSummarizer() {
       try {
         const sla = localStorage.getItem("penvoy_sla_hours");
         if (sla) setSlaHours(parseInt(sla) || 48);
+      } catch {}
+      try {
+        const sp = localStorage.getItem("penvoy_style_profile");
+        if (sp) setStyleProfile(sp);
       } catch {}
     })();
   }, []);
@@ -465,6 +549,48 @@ export default function EmailSummarizer() {
     const hrs = parseInt(val) || 48;
     setSlaHours(hrs);
     try { localStorage.setItem("penvoy_sla_hours", String(hrs)); } catch {}
+  };
+
+  const analyzeStyle = async () => {
+    const filled = styleSamples.filter((s) => s.trim().length > 20);
+    if (filled.length < 2) { setError("Please paste at least 2 sample emails (each at least a few sentences)."); return; }
+    setAnalyzingStyle(true);
+    setError(null);
+    try {
+      const prompt = `Analyze these ${filled.length} email samples written by the same person. Create a concise writing style profile (max 150 words) that captures their patterns.
+
+Focus on:
+- Greeting style (Hi/Hey/Hello, formal vs casual)
+- Sign-off style (Thanks/Thank you/Best/Regards)
+- Sentence length (short and punchy vs long and detailed)
+- Formality level (casual, professional, formal)
+- Use of bullet points or numbered lists
+- Use of emoji
+- Tone (warm, direct, friendly, corporate)
+- Vocabulary complexity (simple vs advanced)
+- Any distinctive habits or phrases they repeat
+
+Return ONLY the style profile as a paragraph. No preamble, no "Here's the profile:", just the description.
+
+Sample emails:
+${filled.map((s, i) => `--- EMAIL ${i + 1} ---\n${s.trim()}`).join("\n\n")}`;
+
+      const result = await callAI(prompt, 300);
+      const profile = result.trim();
+      setStyleProfile(profile);
+      try { localStorage.setItem("penvoy_style_profile", profile); } catch {}
+      setShowStyleSetup(false);
+      setStyleSamples(["", "", ""]);
+    } catch (err) {
+      setError("Failed to analyze style: " + (err.message || "Please try again."));
+    } finally {
+      setAnalyzingStyle(false);
+    }
+  };
+
+  const clearStyleProfile = () => {
+    setStyleProfile("");
+    try { localStorage.removeItem("penvoy_style_profile"); } catch {}
   };
 
   // Unified API call — works with both Anthropic and OpenAI
@@ -702,15 +828,21 @@ export default function EmailSummarizer() {
 
       const u = userName || "the user";
 
+      const langRule = replyLanguage === "original"
+        ? "Write the draft reply in the SAME language as the email/thread. If the email is in Spanish, reply in Spanish. If Tagalog, reply in Tagalog. ALWAYS write the summary/analysis in English regardless."
+        : replyLanguage === "english"
+        ? "Default to English. ONLY match another language if the ENTIRE thread/email is written in that language. If mixed languages, use English. When in doubt, use English."
+        : `Write the draft reply in ${replyLanguage}. ALWAYS write the summary/analysis in English regardless.`;
+
       const styleRules = `DRAFT STYLE:
-- Language: Default to English. ONLY match another language if the ENTIRE thread/email is written in that language (e.g. all Tagalog, all Spanish). If the thread mixes languages, ALWAYS use English. When in doubt, use English
+- Language: ${langRule}
 - Greeting: "Hi [name]," or "Hey [name]," — "Hey" for familiar, "Hi" for others. Match thread formality
 - Sign-off: end with "Thank you!" or natural closing that fits. NEVER add a name/signature after
 - Concise, no fluff or filler. Get to the point
 - Use bullet points when listing multiple items
 - Emoji sparingly only if thread tone is casual/friendly
 - Say "please let us know" or "please let me know" — NEVER "please let you know" or "let us know" without please
-- Tone: ${toneInstruction}`;
+- Tone: ${toneInstruction}${styleProfile ? `\n\nUSER'S PERSONAL WRITING STYLE (match this closely):\n${styleProfile}` : ""}`;
 
       const prompt = mode === "thread"
         ? `Analyze thread for "${u}". ONLY valid JSON, no markdown.
@@ -844,6 +976,7 @@ ${processedText}`;
       followup: "Draft a follow-up/reminder email",
       forward: "Draft a forwarding email with context explaining why",
       decline: "Draft a polite decline/rejection email",
+      coverletter: "Write a professional cover letter for a job application. The user will paste the job listing and their background/notes. Match the candidate's experience to the job requirements. Structure: opening (why this role excites them), body (2-3 paragraphs matching their skills to requirements), closing (enthusiasm + call to action). Do NOT use generic filler. Every sentence should reference specific details from the job listing or the candidate's notes. Return as {\"subject\":\"Application for [Role] - [Name]\",\"body\":\"the cover letter\"}",
     };
 
     try {
@@ -881,7 +1014,7 @@ FORMATTING:
 - Language: Default English. Only match another language if the notes are ENTIRELY in that language
 - Say "please let me know" or "please let us know" — NEVER "please let you know"
 - Subject line: clear, specific, professional
-
+${styleProfile ? `\nUSER'S PERSONAL WRITING STYLE (match this closely):\n${styleProfile}` : ""}
 Notes: ${composeNotes}`;
       const raw = await callAI(composePrompt, 800, controller.signal);
       clearTimeout(timeout);
@@ -948,10 +1081,14 @@ Notes: ${composeNotes}`;
             {[
               { icon: "⚡", title: "Instant Summaries", desc: "Paste any email, get bullet-point summary + action items" },
               { icon: "💬", title: "Thread Analysis", desc: "Find who needs your reply and what's still open" },
-              { icon: "✍️", title: "Smart Drafting", desc: "Draft replies and new emails in your writing style" },
-              { icon: "⏱️", title: "SLA Tracker", desc: "Set your own SLA window and never miss a response deadline" },
+              { icon: "✍️", title: "Learns Your Voice", desc: "Paste sample emails — it matches your writing style in every draft" },
+              { icon: "🌐", title: "Translate & Draft", desc: "Email in any language? Summary in English, reply in theirs" },
+              { icon: "📊", title: "Reply Quality Scorer", desc: "Score your draft 1-10 with actionable feedback before sending" },
+              { icon: "📄", title: "Cover Letters", desc: "Paste a job listing + your notes — get a tailored cover letter" },
+              { icon: "📋", title: "Email Templates", desc: "Quick-load templates for common scenarios — meetings, updates, apologies" },
+              { icon: "⏱️", title: "SLA Tracker", desc: "Customizable response deadlines — never miss a reply window" },
               { icon: "🎨", title: "5 Tone Presets", desc: "Friendly, Formal, Casual, Empathetic, or Direct" },
-              { icon: "🔑", title: "BYOK — Your Key", desc: "Works with Claude or GPT-4o. Your key, your data" },
+              { icon: "🔑", title: "BYOK — Your Key", desc: "Works with Claude or GPT-4o. Your key, your data, your browser" },
             ].map((f, i) => (
               <div key={i} style={{
                 padding: "16px 18px", background: "rgba(255,255,255,0.03)",
@@ -1120,9 +1257,100 @@ Notes: ${composeNotes}`;
               ))}
             </div>
           </div>
+          {/* Writing Style */}
+          <div style={{ marginTop: 14, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 12, fontWeight: 600, color: "#8b8fa3" }}>✍️ Writing Style:</span>
+            {styleProfile ? (
+              <>
+                <span style={{ fontSize: 11, color: "#22c55e", fontWeight: 600 }}>✓ Configured</span>
+                <button onClick={() => setShowStyleSetup(true)} style={{
+                  fontSize: 11, fontWeight: 600, padding: "4px 10px", borderRadius: 7,
+                  background: "rgba(99,102,241,0.1)", border: "1px solid rgba(99,102,241,0.2)",
+                  color: "#a5b4fc", cursor: "pointer", fontFamily: "'DM Sans', system-ui, sans-serif",
+                }}>Redo</button>
+                <button onClick={clearStyleProfile} style={{
+                  fontSize: 11, fontWeight: 600, padding: "4px 10px", borderRadius: 7,
+                  background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)",
+                  color: "#f87171", cursor: "pointer", fontFamily: "'DM Sans', system-ui, sans-serif",
+                }}>Clear</button>
+              </>
+            ) : (
+              <button onClick={() => setShowStyleSetup(true)} style={{
+                fontSize: 11, fontWeight: 600, padding: "5px 12px", borderRadius: 7,
+                background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.25)",
+                color: "#fbbf24", cursor: "pointer", fontFamily: "'DM Sans', system-ui, sans-serif",
+              }}>Set up — paste your sample emails</button>
+            )}
+          </div>
+          {styleProfile && (
+            <div style={{ marginTop: 8, padding: "10px 14px", background: "rgba(34,197,94,0.05)", border: "1px solid rgba(34,197,94,0.1)", borderRadius: 10 }}>
+              <p style={{ fontSize: 11, color: "#6b8f6b", lineHeight: 1.5, margin: 0 }}>{styleProfile}</p>
+            </div>
+          )}
         </div>
 
-        {/* Mode Toggle */}
+        {/* Writing Style Setup Modal */}
+        {showStyleSetup && (
+          <div style={{
+            position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", display: "flex",
+            alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 20,
+          }} onClick={(e) => { if (e.target === e.currentTarget) setShowStyleSetup(false); }}>
+            <div style={{
+              background: "#1a1d2e", border: "1px solid rgba(255,255,255,0.1)",
+              borderRadius: 20, padding: 28, maxWidth: 600, width: "100%", maxHeight: "90vh", overflowY: "auto",
+            }}>
+              <h3 style={{ fontSize: 18, fontWeight: 700, color: "#e0e7ff", margin: "0 0 8px" }}>
+                ✍️ Set Up Your Writing Style
+              </h3>
+              <p style={{ fontSize: 13, color: "#8b8fa3", margin: "0 0 20px", lineHeight: 1.5 }}>
+                Paste 2-3 emails you've written. The AI will analyze your writing patterns and match your style in every draft.
+              </p>
+              {[0, 1, 2].map((i) => (
+                <div key={i} style={{ marginBottom: 14 }}>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: "#6b6f8a", display: "block", marginBottom: 6 }}>
+                    SAMPLE EMAIL {i + 1} {i < 2 ? "(required)" : "(optional)"}
+                  </label>
+                  <textarea
+                    value={styleSamples[i]}
+                    onChange={(e) => {
+                      const updated = [...styleSamples];
+                      updated[i] = e.target.value;
+                      setStyleSamples(updated);
+                    }}
+                    placeholder={i === 0 ? "Paste a work email you've sent..." : i === 1 ? "Paste another email in a different context..." : "Paste a third email (optional but helps accuracy)..."}
+                    style={{
+                      width: "100%", minHeight: 100, background: "rgba(0,0,0,0.3)",
+                      border: `1px solid ${styleSamples[i].trim().length > 20 ? "rgba(34,197,94,0.2)" : "rgba(255,255,255,0.08)"}`,
+                      borderRadius: 10, padding: 12, color: "#d1d5e4", fontSize: 12,
+                      lineHeight: 1.6, resize: "vertical", outline: "none",
+                      fontFamily: "'DM Sans', system-ui, sans-serif", boxSizing: "border-box",
+                    }}
+                  />
+                </div>
+              ))}
+              <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
+                <button
+                  onClick={analyzeStyle}
+                  disabled={analyzingStyle || styleSamples.filter((s) => s.trim().length > 20).length < 2}
+                  style={{
+                    flex: 1, padding: "12px 20px",
+                    background: analyzingStyle || styleSamples.filter((s) => s.trim().length > 20).length < 2
+                      ? "rgba(99,102,241,0.2)" : "linear-gradient(135deg, #6366f1, #7c3aed)",
+                    border: "none", borderRadius: 10, color: "#fff", fontSize: 14, fontWeight: 600,
+                    cursor: analyzingStyle ? "wait" : "pointer",
+                    fontFamily: "'DM Sans', system-ui, sans-serif",
+                  }}
+                >{analyzingStyle ? "Analyzing your style..." : "Analyze My Style"}</button>
+                <button onClick={() => setShowStyleSetup(false)} style={{
+                  padding: "12px 20px", background: "rgba(255,255,255,0.05)",
+                  border: "1px solid rgba(255,255,255,0.1)", borderRadius: 10,
+                  color: "#6b6f8a", fontSize: 14, fontWeight: 600, cursor: "pointer",
+                  fontFamily: "'DM Sans', system-ui, sans-serif",
+                }}>Cancel</button>
+              </div>
+            </div>
+          </div>
+        )}
         <div style={{
           display: "flex", gap: 6, padding: 4,
           background: "rgba(255,255,255,0.04)", borderRadius: 14,
@@ -1171,7 +1399,7 @@ Notes: ${composeNotes}`;
               </label>
               <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
                 <input type="text" value={composeTo} onChange={(e) => setComposeTo(e.target.value)}
-                  placeholder="To: e.g. Jungkook, Namjoon Kim, Supply Chain Team"
+                  placeholder={composeType === "coverletter" ? "To: e.g. Hiring Manager, HR Team, recruiter@company.com" : "To: e.g. Jungkook, Namjoon Kim, Supply Chain Team"}
                   style={{
                     flex: 1, background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255,255,255,0.08)",
                     borderRadius: 10, padding: "10px 14px", color: "#d1d5e4", fontSize: 13,
@@ -1185,6 +1413,7 @@ Notes: ${composeNotes}`;
                   { id: "followup", label: "🔔 Follow-up" },
                   { id: "forward", label: "↗️ Forward" },
                   { id: "decline", label: "🚫 Decline" },
+                  { id: "coverletter", label: "📄 Cover Letter" },
                 ].map((t) => (
                   <button key={t.id} onClick={() => setComposeType(t.id)} style={{
                     padding: "7px 14px", borderRadius: 10, fontSize: 12, fontWeight: 600,
@@ -1196,10 +1425,38 @@ Notes: ${composeNotes}`;
                   }}>{t.label}</button>
                 ))}
               </div>
+              {/* Quick Templates */}
+              <div style={{ marginBottom: 14 }}>
+                <label style={{ fontSize: 11, fontWeight: 600, color: "#6b6f8a", display: "block", marginBottom: 6 }}>
+                  📋 QUICK TEMPLATES (click to pre-fill)
+                </label>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {[
+                    { label: "Meeting request", notes: "I'd like to schedule a meeting to discuss [topic]. Are you available [time options]?" },
+                    { label: "Status update", notes: "Giving an update on [project]. Here's where we are: [progress]. Next steps: [what's next]. Let me know if you have questions." },
+                    { label: "Introduction", notes: "Introducing [person A] to [person B]. [Person A] works on [what they do] and [Person B] handles [what they do]. I think you two should connect because [reason]." },
+                    { label: "Request approval", notes: "Requesting approval for [what]. Here's the context: [details]. The cost/impact is [amount]. I recommend we proceed because [reason]." },
+                    { label: "Thank you", notes: "Thank you for [what they did]. It really helped with [impact]. I appreciate [specific thing]." },
+                    { label: "Apology", notes: "Apologies for [what happened]. Here's what went wrong: [explanation]. Here's what I'm doing to fix it: [action]. It won't happen again because [prevention]." },
+                    { label: "Bad news", notes: "Unfortunately, [the bad news]. Here's why: [reason]. What we can do instead: [alternative]. Let me know how you'd like to proceed." },
+                    { label: "Escalation", notes: "Escalating [issue] because [reason it needs attention]. Here's the background: [context]. The impact is [what's at risk]. I need [what you're asking for] by [when]." },
+                  ].map((t) => (
+                    <button key={t.label} onClick={() => { setComposeNotes(t.notes); setComposeType("new"); }} style={{
+                      padding: "5px 10px", borderRadius: 7, fontSize: 10, fontWeight: 600,
+                      cursor: "pointer", fontFamily: "'DM Sans', system-ui, sans-serif",
+                      background: "rgba(255,255,255,0.03)",
+                      border: "1px solid rgba(255,255,255,0.08)",
+                      color: "#6b6f8a",
+                    }}>{t.label}</button>
+                  ))}
+                </div>
+              </div>
               <textarea
                 value={composeNotes}
                 onChange={(e) => setComposeNotes(e.target.value)}
-                placeholder={"Just dump your thoughts here in plain language...\n\ne.g. \"tell Hoseok we can't accept deliveries right now, be vague about when we'll start again. CC Yoongi Min since he handles warehouse logistics\""}
+                placeholder={composeType === "coverletter"
+                  ? "Paste the job listing here, then add your background...\n\ne.g. \"Job: Senior Operations Manager at Shopify. Requirements: 5+ years operations, team management, process automation.\n\nMy background: 6 years in e-commerce operations, managed team of 12 VAs, built automation tools, experienced with Amazon FBA and supply chain.\""
+                  : "Just dump your thoughts here in plain language...\n\ne.g. \"tell Hoseok we can't accept deliveries right now, be vague about when we'll start again. CC Yoongi Min since he handles warehouse logistics\""}
                 style={{
                   width: "100%", minHeight: 150, background: "rgba(0,0,0,0.3)",
                   border: "1px solid rgba(255,255,255,0.08)", borderRadius: 12,
@@ -1256,7 +1513,7 @@ Notes: ${composeNotes}`;
                   }} />
                   Drafting... {loadingTime}s
                 </span>
-              ) : composeResult ? "🔄 Re-draft" : "✍️ Draft Email"}
+              ) : composeResult ? "🔄 Re-draft" : composeType === "coverletter" ? "📄 Generate Cover Letter" : "✍️ Draft Email"}
             </button>
           </>) : (<>
           {/* Existing analyze inputs */}
@@ -1365,6 +1622,32 @@ Notes: ${composeNotes}`;
             </div>
           </div>
 
+          {/* Reply Language */}
+          <div style={{ marginTop: 14 }}>
+            <label style={{ fontSize: 12, fontWeight: 600, color: "#8b8fa3", display: "block", marginBottom: 8 }}>
+              🌐 REPLY LANGUAGE
+            </label>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {[
+                { id: "english", label: "English" },
+                { id: "original", label: "Match email language" },
+                { id: "Spanish", label: "Spanish" },
+                { id: "Tagalog", label: "Tagalog" },
+                { id: "French", label: "French" },
+                { id: "Japanese", label: "Japanese" },
+                { id: "Korean", label: "Korean" },
+              ].map((l) => (
+                <button key={l.id} onClick={() => setReplyLanguage(l.id)} style={{
+                  padding: "7px 14px", borderRadius: 10, fontSize: 12, fontWeight: 600,
+                  cursor: "pointer", fontFamily: "'DM Sans', system-ui, sans-serif",
+                  background: replyLanguage === l.id ? "rgba(16,163,127,0.2)" : "rgba(255,255,255,0.03)",
+                  border: replyLanguage === l.id ? "1px solid rgba(16,163,127,0.4)" : "1px solid rgba(255,255,255,0.08)",
+                  color: replyLanguage === l.id ? "#6ee7b7" : "#6b6f8a",
+                }}>{l.label}</button>
+              ))}
+            </div>
+          </div>
+
           <button
             onClick={processEmail}
             disabled={loading || !emailText.trim()}
@@ -1442,6 +1725,7 @@ Notes: ${composeNotes}`;
               replyAdjustment={replyAdjustment} setReplyAdjustment={setReplyAdjustment}
               regenerating={regenerating} onRegenerate={regenerateReply}
             />}
+            {draftReply && <ReplyScorer draft={draftReply} callAI={callAI} />}
           </div>
         )}
 
@@ -1627,6 +1911,7 @@ Notes: ${composeNotes}`;
                   }}
                   callAI={callAI}
                 />
+                <ReplyScorer draft={rp.draft} callAI={callAI} />
               </div>
             ))}
           </div>
@@ -1696,6 +1981,7 @@ Notes: ${composeNotes}`;
 
               {/* Adjust */}
               <ReplyAdjuster draft={composeResult.body} onUpdate={(newBody) => setComposeResult({ ...composeResult, body: newBody })} callAI={callAI} />
+              <ReplyScorer draft={composeResult.body} callAI={callAI} />
             </div>
           </div>
         )}
